@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KTX 취소표 스나이퍼</title>
+  <style>
+    :root {
+      --blue:      #1d4ed8;
+      --blue-dark: #1e3a8a;
+      --green:     #15803d;
+      --green-bg:  #f0fdf4;
+      --green-bd:  #86efac;
+      --red:       #dc2626;
+      --red-bg:    #fef2f2;
+      --yellow:    #b45309;
+      --yellow-bg: #fffbeb;
+      --gray-50:   #f9fafb;
+      --gray-100:  #f3f4f6;
+      --gray-200:  #e5e7eb;
+      --gray-400:  #9ca3af;
+      --gray-600:  #4b5563;
+      --gray-800:  #1f2937;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--gray-50);
+      color: var(--gray-800);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    /* ── 헤더 ── */
+    header {
+      background: linear-gradient(135deg, var(--blue-dark), var(--blue));
+      color: #fff;
+      padding: 1.125rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    header h1 { font-size: 1.125rem; font-weight: 700; letter-spacing: -0.02em; }
+    header p  { font-size: 0.8125rem; opacity: 0.75; margin-top: 0.125rem; }
+
+    /* ── 레이아웃 ── */
+    .container { max-width: 760px; margin: 1.75rem auto 3rem; padding: 0 1rem; }
+
+    /* ── 카드 ── */
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);
+    }
+
+    .card-title {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: var(--blue);
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* ── 폼 ── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.875rem; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.875rem; }
+
+    .field { display: flex; flex-direction: column; gap: 0.375rem; }
+    .field label { font-size: 0.8125rem; font-weight: 600; color: var(--gray-600); }
+
+    input[type=text], input[type=date], input[type=time], input[type=number], select {
+      width: 100%;
+      padding: 0.625rem 0.75rem;
+      border: 1.5px solid var(--gray-200);
+      border-radius: 8px;
+      font-size: 0.9375rem;
+      font-family: inherit;
+      color: var(--gray-800);
+      background: #fff;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      -webkit-appearance: none;
+    }
+    input:focus, select:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(29,78,216,0.1);
+    }
+
+    /* ── 버튼 ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.375rem;
+      padding: 0.6875rem 1.25rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: var(--blue); color: #fff; width: 100%; margin-top: 1.125rem; }
+    .btn-primary:hover { background: #1e40af; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-stop {
+      background: var(--red);
+      color: #fff;
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+    }
+    .btn-stop:hover { background: #b91c1c; }
+    .btn-sm {
+      padding: 0.3125rem 0.75rem;
+      font-size: 0.8125rem;
+      background: var(--gray-100);
+      color: var(--gray-600);
+      border: 1.5px solid var(--gray-200);
+      border-radius: 6px;
+    }
+    .btn-sm:hover { background: var(--gray-200); }
+
+    /* ── 에러 메시지 ── */
+    .error-box {
+      margin-top: 0.875rem;
+      padding: 0.75rem 1rem;
+      background: var(--red-bg);
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      color: var(--red);
+      font-size: 0.875rem;
+    }
+
+    /* ── 열차 테이블 ── */
+    .train-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 0.5rem;
+    }
+    .train-table th {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--gray-600);
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 2px solid var(--gray-200);
+    }
+    .train-table td {
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--gray-100);
+      vertical-align: middle;
+    }
+    .train-table tr:last-child td { border-bottom: none; }
+    .train-table tr:hover td { background: var(--gray-50); }
+    .train-table input[type=checkbox] {
+      width: 1rem;
+      height: 1rem;
+      cursor: pointer;
+      accent-color: var(--blue);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-sold   { background: #fee2e2; color: var(--red); }
+    .badge-seat   { background: #dcfce7; color: var(--green); }
+    .badge-wait   { background: var(--yellow-bg); color: var(--yellow); }
+
+    .table-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.875rem;
+    }
+
+    /* ── 로그 ── */
+    .log-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.875rem;
+    }
+    .log-title {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: var(--blue);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .pill {
+      background: var(--gray-100);
+      color: var(--gray-600);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.2rem 0.625rem;
+      border-radius: 9999px;
+    }
+    .pill.running { background: #dbeafe; color: var(--blue); }
+
+    .log-box {
+      background: #0f172a;
+      color: #cbd5e1;
+      border-radius: 10px;
+      padding: 0.875rem 1rem;
+      font-family: 'SF Mono', 'Menlo', 'Courier New', monospace;
+      font-size: 0.8125rem;
+      line-height: 1.7;
+      height: 320px;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+    .log-box::-webkit-scrollbar { width: 6px; }
+    .log-box::-webkit-scrollbar-track { background: transparent; }
+    .log-box::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+    .log-ts   { color: #475569; margin-right: 0.5rem; user-select: none; }
+    .log-info   { color: #cbd5e1; }
+    .log-warn   { color: #fbbf24; }
+    .log-success { color: #4ade80; font-weight: 700; }
+    .log-error  { color: #f87171; }
+
+    /* ── 성공 카드 ── */
+    .success-card {
+      background: var(--green-bg);
+      border: 2px solid var(--green-bd);
+      border-radius: 14px;
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .success-title {
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: var(--green);
+      margin-bottom: 1.125rem;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.625rem 0;
+      border-bottom: 1px solid var(--green-bd);
+    }
+    .info-row:last-of-type { border-bottom: none; }
+    .info-label { font-size: 0.875rem; color: var(--gray-600); }
+    .info-value { font-weight: 700; font-size: 0.9375rem; }
+    .pay-warning {
+      margin-top: 1.125rem;
+      padding: 0.75rem 1rem;
+      background: #fef9c3;
+      border: 1px solid #fde047;
+      border-radius: 8px;
+      color: var(--yellow);
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+
+    /* ── 스피너 ── */
+    .spinner {
+      display: inline-block;
+      width: 0.9375rem;
+      height: 0.9375rem;
+      border: 2px solid rgba(255,255,255,0.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── 상태 점 ── */
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot.running { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.25); animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { box-shadow: 0 0 0 3px rgba(34,197,94,0.25); } 50% { box-shadow: 0 0 0 6px rgba(34,197,94,0.1); } }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 540px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      header h1 { font-size: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🚄 KTX 취소표 스나이퍼</h1>
+    <p>취소표 발생 즉시 자동 예약 — 결제는 Korail 앱에서 직접</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ① 열차 조회 -->
+  <div class="card" id="card-search">
+    <div class="card-title">① 열차 조회</div>
+
+    <div class="grid-2" style="margin-bottom:.875rem">
+      <div class="field">
+        <label>출발역</label>
+        <input type="text" id="dep" placeholder="서울" value="서울">
+      </div>
+      <div class="field">
+        <label>도착역</label>
+        <input type="text" id="arr" placeholder="부산" value="부산">
+      </div>
+    </div>
+
+    <div class="grid-3" style="margin-bottom:.875rem">
+      <div class="field">
+        <label>날짜</label>
+        <input type="date" id="date">
+      </div>
+      <div class="field">
+        <label>시작 시각</label>
+        <input type="time" id="from-time" value="09:00">
+      </div>
+      <div class="field">
+        <label>종료 시각</label>
+        <input type="time" id="to-time" value="23:59">
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="btn-search" onclick="doSearch()">
+      열차 조회
+    </button>
+    <div class="error-box hidden" id="search-error"></div>
+  </div>
+
+  <!-- ② 열차 선택 -->
+  <div class="card hidden" id="card-trains">
+    <div class="card-title">
+      <span>② 스나이핑할 열차 선택</span>
+      <span id="train-count" style="font-size:.8125rem;font-weight:500;color:var(--gray-400)"></span>
+    </div>
+    <div class="table-actions">
+      <button class="btn btn-sm" onclick="selectAll(true)">전체 선택</button>
+      <button class="btn btn-sm" onclick="selectAll(false)">전체 해제</button>
+      <button class="btn btn-sm" onclick="selectSoldOnly()">매진만 선택</button>
+    </div>
+    <table class="train-table">
+      <thead>
+        <tr>
+          <th style="width:2.5rem"></th>
+          <th>열차번호</th>
+          <th>출발</th>
+          <th>도착</th>
+          <th>좌석 상태</th>
+        </tr>
+      </thead>
+      <tbody id="train-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- ③ 옵션 -->
+  <div class="card hidden" id="card-options">
+    <div class="card-title">③ 옵션</div>
+    <div class="grid-2" style="margin-bottom:.875rem">
+      <div class="field">
+        <label>좌석 선호</label>
+        <select id="seat-option">
+          <option value="general-first">일반석 우선</option>
+          <option value="general-only">일반석만</option>
+          <option value="special-first">특실 우선</option>
+          <option value="special-only">특실만</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>폴링 간격 (초, 최소 30)</label>
+        <input type="number" id="interval" value="45" min="30" max="300">
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem;font-weight:500;color:var(--gray-800)">
+        <input type="checkbox" id="try-waiting" style="width:auto;height:auto;accent-color:var(--blue)">
+        좌석 없으면 예약대기도 시도
+      </label>
+    </div>
+    <button class="btn btn-primary" id="btn-start" onclick="doStart()">
+      🎯 스나이핑 시작
+    </button>
+    <div class="error-box hidden" id="start-error"></div>
+  </div>
+
+  <!-- ④ 실시간 로그 -->
+  <div class="card hidden" id="card-log">
+    <div class="log-header">
+      <div class="log-title">
+        <span class="dot running" id="dot"></span>
+        실시간 상태
+        <span class="pill running" id="poll-pill">대기 중</span>
+      </div>
+      <button class="btn btn-stop" onclick="doStop()">■ 중단</button>
+    </div>
+    <div class="log-box" id="log-box"></div>
+  </div>
+
+  <!-- 성공 -->
+  <div class="success-card hidden" id="card-success">
+    <div class="success-title">✅ KTX 예약 성공!</div>
+    <div id="success-body"></div>
+    <div class="pay-warning">⚠ Korail 앱 또는 www.letskorail.com 에서 결제 기한 내에 결제를 완료하세요!</div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+  // ── 초기화 ────────────────────────────────────────────────────────────────
+  (function () {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm   = String(today.getMonth() + 1).padStart(2, '0');
+    const dd   = String(today.getDate()).padStart(2, '0');
+    document.getElementById('date').value = `${yyyy}-${mm}-${dd}`;
+  })();
+
+  let trainData   = [];
+  let eventSource = null;
+  let pollAttempt = 0;
+
+  // ── 유틸 ─────────────────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+
+  function show(id)  { $(id).classList.remove('hidden'); }
+  function hide(id)  { $(id).classList.add('hidden'); }
+
+  function showError(id, msg) {
+    const el = $(id);
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+  function hideError(id) { $(id).classList.add('hidden'); }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function toDateParam(v)  { return v.replace(/-/g, ''); }           // YYYY-MM-DD → YYYYMMDD
+  function toTimeParam(v)  { return v.replace(':', '') + '00'; }     // HH:MM → HHMMSS
+
+  // ── 열차 조회 ─────────────────────────────────────────────────────────────
+  async function doSearch() {
+    const btn = $('btn-search');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 조회 중…';
+    hideError('search-error');
+    hide('card-trains');
+    hide('card-options');
+
+    const dep  = $('dep').value.trim();
+    const arr  = $('arr').value.trim();
+    const date = $('date').value;
+    const from = $('from-time').value;
+    const to   = $('to-time').value;
+
+    if (!dep || !arr || !date) {
+      showError('search-error', '출발역, 도착역, 날짜를 모두 입력하세요.');
+      btn.disabled = false;
+      btn.textContent = '열차 조회';
+      return;
+    }
+
+    try {
+      const res  = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dep, arr,
+          date:      toDateParam(date),
+          from_time: toTimeParam(from),
+          to_time:   toTimeParam(to),
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showError('search-error', data.error || '조회 실패');
+        return;
+      }
+
+      trainData = data.trains;
+      renderTrains(trainData);
+      show('card-trains');
+      show('card-options');
+      $('card-trains').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    } catch (e) {
+      showError('search-error', `네트워크 오류: ${e.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '열차 조회';
+    }
+  }
+
+  function renderTrains(trains) {
+    $('train-count').textContent = `${trains.length}개 열차`;
+    $('train-tbody').innerHTML = trains.map(t => {
+      const isSoldOut = !t.has_general_seat && !t.has_special_seat && !t.has_waiting_list;
+      const hasAvail  = t.has_general_seat || t.has_special_seat;
+      const badge = hasAvail
+        ? `<span class="badge badge-seat">${t.status}</span>`
+        : t.has_waiting_list
+          ? `<span class="badge badge-wait">${t.status}</span>`
+          : `<span class="badge badge-sold">${t.status}</span>`;
+      const checked = isSoldOut ? 'checked' : '';
+      return `
+        <tr>
+          <td><input type="checkbox" class="train-chk" value="${t.train_id}" data-sold="${isSoldOut}" ${checked}></td>
+          <td style="font-weight:700">${escHtml(t.train_no)}</td>
+          <td>${escHtml(t.dep_time)}</td>
+          <td>${escHtml(t.arr_time)}</td>
+          <td>${badge}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  function selectAll(checked) {
+    document.querySelectorAll('.train-chk').forEach(c => c.checked = checked);
+  }
+  function selectSoldOnly() {
+    document.querySelectorAll('.train-chk').forEach(c => {
+      c.checked = c.dataset.sold === 'true';
+    });
+  }
+
+  // ── 스나이핑 시작 ─────────────────────────────────────────────────────────
+  async function doStart() {
+    const checked = [...document.querySelectorAll('.train-chk:checked')];
+    if (!checked.length) {
+      showError('start-error', '열차를 하나 이상 선택하세요.');
+      return;
+    }
+    hideError('start-error');
+
+    const btn  = $('btn-start');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 시작 중…';
+
+    const interval = parseFloat($('interval').value) || 45;
+    if (interval < 30) {
+      $('interval').value = 45;
+    }
+
+    const payload = {
+      dep:        $('dep').value.trim(),
+      arr:        $('arr').value.trim(),
+      date:       toDateParam($('date').value),
+      from_time:  toTimeParam($('from-time').value),
+      train_ids:  checked.map(c => c.value),
+      seat_option: $('seat-option').value,
+      try_waiting: $('try-waiting').checked,
+      interval:   Math.max(30, interval),
+    };
+
+    try {
+      const res  = await fetch('/api/snipe/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showError('start-error', data.error || '시작 실패');
+        btn.disabled = false;
+        btn.textContent = '🎯 스나이핑 시작';
+        return;
+      }
+    } catch (e) {
+      showError('start-error', `오류: ${e.message}`);
+      btn.disabled = false;
+      btn.textContent = '🎯 스나이핑 시작';
+      return;
+    }
+
+    // 로그 패널 오픈
+    $('log-box').innerHTML = '';
+    pollAttempt = 0;
+    hide('card-success');
+    show('card-log');
+    $('dot').classList.add('running');
+    $('card-log').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    startStream();
+  }
+
+  // ── SSE 스트림 ────────────────────────────────────────────────────────────
+  function startStream() {
+    if (eventSource) eventSource.close();
+    eventSource = new EventSource('/api/snipe/stream');
+
+    eventSource.onmessage = e => {
+      try { handleMsg(JSON.parse(e.data)); }
+      catch (_) {}
+    };
+    eventSource.onerror = () => {
+      addLog('서버 연결 끊김', 'warn');
+    };
+  }
+
+  function handleMsg(msg) {
+    switch (msg.type) {
+      case 'log':
+        addLog(msg.msg, msg.level, msg.ts);
+        break;
+
+      case 'poll':
+        pollAttempt = msg.attempt;
+        $('poll-pill').textContent = `${msg.attempt}번째 조회`;
+        break;
+
+      case 'success':
+        showSuccess(msg.reservation);
+        stopStream();
+        resetStartBtn();
+        break;
+
+      case 'error':
+        addLog(msg.msg, 'error');
+        stopStream();
+        resetStartBtn();
+        break;
+
+      case 'done':
+        addLog('스나이퍼 종료', 'warn');
+        stopStream();
+        resetStartBtn();
+        break;
+    }
+  }
+
+  function stopStream() {
+    if (eventSource) { eventSource.close(); eventSource = null; }
+    $('dot').classList.remove('running');
+    $('poll-pill').textContent = '종료';
+    $('poll-pill').classList.remove('running');
+  }
+
+  function resetStartBtn() {
+    const btn = $('btn-start');
+    btn.disabled = false;
+    btn.textContent = '🎯 스나이핑 시작';
+  }
+
+  function addLog(msg, level = 'info', ts = null) {
+    const box  = $('log-box');
+    const line = document.createElement('div');
+    const time = ts || new Date().toTimeString().slice(0, 8);
+    line.innerHTML = `<span class="log-ts">${escHtml(time)}</span>`
+                   + `<span class="log-${level || 'info'}">${escHtml(msg)}</span>`;
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  // ── 성공 표시 ─────────────────────────────────────────────────────────────
+  function showSuccess(r) {
+    show('card-success');
+    $('success-body').innerHTML = `
+      <div class="info-row">
+        <span class="info-label">예약번호</span>
+        <span class="info-value" style="color:var(--blue)">${escHtml(r.reservation_id)}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">열차</span>
+        <span class="info-value">${escHtml(r.train_type)} ${escHtml(r.train_no)}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">구간</span>
+        <span class="info-value">${escHtml(r.dep_name)} ${escHtml(r.dep_time)} → ${escHtml(r.arr_name)} ${escHtml(r.arr_time)}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">운임</span>
+        <span class="info-value">${escHtml(String(r.price))}원</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">결제 기한</span>
+        <span class="info-value" style="color:var(--red)">${escHtml(r.buy_limit_date)} ${escHtml(r.buy_limit_time)}</span>
+      </div>
+    `;
+    $('card-success').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ── 중단 ──────────────────────────────────────────────────────────────────
+  async function doStop() {
+    await fetch('/api/snipe/stop', { method: 'POST' }).catch(() => {});
+    stopStream();
+    resetStartBtn();
+  }
+
+  // ── Enter 키 조회 ─────────────────────────────────────────────────────────
+  ['dep','arr','date','from-time','to-time'].forEach(id => {
+    $(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') doSearch();
+    });
+  });
+</script>
+</body>
+</html>

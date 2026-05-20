@@ -24,8 +24,8 @@ echo "  ✅  Python $PY_VERSION"
 
 # ── 2. 패키지 설치 ───────────────────────────────────────────────────────────
 echo ""
-echo "[2] 필수 패키지 설치 (korail2, pycryptodome)..."
-python3 -m pip install --quiet korail2 pycryptodome
+echo "[2] 필수 패키지 설치 (korail2, pycryptodome, flask)..."
+python3 -m pip install --quiet korail2 pycryptodome flask
 echo "  ✅  패키지 설치 완료"
 
 # ── 3. ktx_booking.py 다운로드 ───────────────────────────────────────────────
