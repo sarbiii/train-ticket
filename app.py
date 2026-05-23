@@ -65,6 +65,42 @@ _session: dict = {
 
 # ── 유틸 ─────────────────────────────────────────────────────────────────────
 
+def _discord_notify(res: dict) -> None:
+    url = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
+    if not url:
+        return
+    dep_t = _fmt_time(res.get("dep_time", "")) if len(res.get("dep_time", "")) >= 4 else res.get("dep_time", "?")
+    arr_t = _fmt_time(res.get("arr_time", "")) if len(res.get("arr_time", "")) >= 4 else res.get("arr_time", "?")
+    buy_d = res.get("buy_limit_date", "?")
+    buy_t_raw = res.get("buy_limit_time", "")
+    buy_t = _fmt_time(buy_t_raw) if len(buy_t_raw) >= 4 else buy_t_raw
+    buy_date = _fmt_date(buy_d) if len(buy_d) == 8 else buy_d
+    user_id = os.environ.get("DISCORD_USER_ID", "").strip()
+    mention = f"<@{user_id}>" if user_id else "@here"
+    payload = {
+        "content": mention,
+        "embeds": [{
+            "title": "🎉 KTX 예약 성공!",
+            "color": 0x22c55e,
+            "fields": [
+                {"name": "예약번호",    "value": res.get("reservation_id", "?"), "inline": True},
+                {"name": "열차",        "value": f"{res.get('train_type','KTX')} {res.get('train_no','?')}", "inline": True},
+                {"name": "구간",        "value": f"{res.get('dep_name','?')} {dep_t} → {res.get('arr_name','?')} {arr_t}", "inline": False},
+                {"name": "운임",        "value": f"{res.get('price','?')}원", "inline": True},
+                {"name": "⚠ 결제기한", "value": f"{buy_date} {buy_t}", "inline": True},
+            ],
+            "footer": {"text": "Korail 앱 또는 letskorail.com 에서 결제기한 내 결제하세요"},
+        }]
+    }
+    try:
+        import requests as _req
+        resp = _req.post(url, json=payload, timeout=10)
+        if resp.status_code not in (200, 204):
+            print(f"[Discord] HTTP {resp.status_code}", flush=True)
+    except Exception as exc:
+        print(f"[Discord] 전송 오류: {exc}", flush=True)
+
+
 def _fmt_time(t: str) -> str:
     return f"{t[:2]}:{t[2:4]}" if len(t) >= 4 else t
 
@@ -431,7 +467,13 @@ def _snipe_thread(
                     "buy_limit_date": _fmt_date(buy_d) if len(buy_d) == 8 else buy_d,
                     "buy_limit_time": buy_t,
                 })
-                return  # ✅ 성공 종료
+                _discord_notify(res)
+                # 성공 메시지가 브라우저에 전달될 시간을 준 뒤 서버 종료
+                def _shutdown():
+                    time.sleep(1.5)
+                    os._exit(0)
+                threading.Thread(target=_shutdown, daemon=True).start()
+                return
 
             except SoldOutError:
                 log("선점 경쟁 패배 — 즉시 재조회", "warn")
