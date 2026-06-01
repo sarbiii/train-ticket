@@ -294,6 +294,12 @@
         <input type="time" id="to-time" value="23:59">
       </div>
     </div>
+    <div class="grid-2" style="margin-bottom:.875rem">
+      <div class="field">
+        <label>성인 인원</label>
+        <input type="number" id="passenger-count" value="1" min="1" max="4">
+      </div>
+    </div>
     <button class="btn btn-primary" id="btn-search" onclick="doSearch()">열차 조회</button>
     <div class="error-box hidden" id="search-error"></div>
   </div>
@@ -443,6 +449,7 @@
   let trainType = 'ktx';
 
   function setTrainType(type) {
+    if (type !== trainType) saveCurrentLogin();
     trainType = type;
     document.getElementById('btn-ktx').classList.toggle('active', type === 'ktx');
     document.getElementById('btn-srt').classList.toggle('active', type === 'srt');
@@ -452,12 +459,15 @@
     const depEl = document.getElementById('dep');
     if (type === 'srt' && depEl.value === '서울') depEl.value = '수서';
     if (type === 'ktx' && depEl.value === '수서') depEl.value = '서울';
+    restoreLogin(type);
   }
 
   // ── 유틸 ─────────────────────────────────────────────────────────────────
   let trainData   = [];
   let eventSource = null;
+  let streamClosed = true;
   let pollAttempt = 0;
+  const LOGIN_STORE_KEY = 'trainTicketLoginV1';
 
   const $ = id => document.getElementById(id);
   function show(id) { $(id).classList.remove('hidden'); }
@@ -474,6 +484,28 @@
   }
   function fromTimeParam(v) {
     return v && v.length >= 4 ? `${v.slice(0, 2)}:${v.slice(2, 4)}` : v;
+  }
+  function clampPassengerCount(v) {
+    const n = parseInt(v, 10);
+    if (!Number.isFinite(n)) return 1;
+    return Math.min(4, Math.max(1, n));
+  }
+  function readSavedLogins() {
+    try { return JSON.parse(localStorage.getItem(LOGIN_STORE_KEY) || '{}') || {}; }
+    catch (_) { return {}; }
+  }
+  function saveCurrentLogin() {
+    const idEl = $('login-id');
+    const pwEl = $('login-password');
+    if (!idEl || !pwEl) return;
+    const saved = readSavedLogins();
+    saved[trainType] = { userId: idEl.value.trim(), password: pwEl.value };
+    localStorage.setItem(LOGIN_STORE_KEY, JSON.stringify(saved));
+  }
+  function restoreLogin(type = trainType) {
+    const saved = readSavedLogins()[type] || {};
+    $('login-id').value = saved.userId || '';
+    $('login-password').value = saved.password || '';
   }
 
   async function restoreState() {
@@ -495,6 +527,7 @@
     if (p.date) $('date').value = fromDateParam(p.date);
     if (p.from_time) $('from-time').value = fromTimeParam(p.from_time);
     if (p.to_time) $('to-time').value = fromTimeParam(p.to_time);
+    if (p.passenger_count) $('passenger-count').value = clampPassengerCount(p.passenger_count);
 
     trainData = search.trains;
     renderTrains(trainData);
@@ -510,6 +543,7 @@
     const p = snipe.payload || {};
     if (p.seat_option) $('seat-option').value = p.seat_option;
     if (p.interval) $('interval').value = p.interval;
+    if (p.passenger_count) $('passenger-count').value = clampPassengerCount(p.passenger_count);
     $('try-waiting').checked = !!p.try_waiting;
   }
 
@@ -572,6 +606,8 @@
     const to   = $('to-time').value;
     const userId = $('login-id').value.trim();
     const password = $('login-password').value;
+    const passengerCount = clampPassengerCount($('passenger-count').value);
+    $('passenger-count').value = passengerCount;
 
     if (!userId || !password || !dep || !arr || !date) {
       showError('search-error', '로그인 ID, 비밀번호, 출발역, 도착역, 날짜를 모두 입력하세요.');
@@ -590,11 +626,13 @@
           from_time: toTimeParam(from),
           to_time: toTimeParam(to),
           train_type: trainType,
+          passenger_count: passengerCount,
           login: { user_id: userId, password },
         }),
       });
       const data = await res.json();
       if (!res.ok) { showError('search-error', data.error || '조회 실패'); return; }
+      saveCurrentLogin();
       trainData = data.trains;
       renderTrains(trainData);
       show('card-trains');
@@ -648,6 +686,8 @@
     btn.innerHTML = '<span class="spinner"></span> 시작 중…';
 
     const interval = parseFloat($('interval').value) || 45;
+    const passengerCount = clampPassengerCount($('passenger-count').value);
+    $('passenger-count').value = passengerCount;
     const payload  = {
       dep:         $('dep').value.trim(),
       arr:         $('arr').value.trim(),
@@ -658,6 +698,7 @@
       seat_option: $('seat-option').value,
       try_waiting: $('try-waiting').checked,
       interval:    Math.max(30, interval),
+      passenger_count: passengerCount,
       train_type:  trainType,
     };
     try {
@@ -691,9 +732,16 @@
   // ── SSE ──────────────────────────────────────────────────────────────────
   function startStream() {
     if (eventSource) eventSource.close();
+    streamClosed = false;
     eventSource = new EventSource('/api/snipe/stream');
     eventSource.onmessage = e => { try { handleMsg(JSON.parse(e.data)); } catch (_) {} };
-    eventSource.onerror   = () => { addLog('서버 연결 끊김', 'warn'); };
+    eventSource.onerror   = () => {
+      if (streamClosed) return;
+      streamClosed = true;
+      addLog('서버 연결 끊김', 'warn');
+      stopStream('연결 끊김');
+      resetStartBtn();
+    };
   }
 
   function handleMsg(msg) {
@@ -708,26 +756,28 @@
       case 'success':
         showSuccess(msg.reservation);
         sendBrowserNotification(msg.reservation);
-        stopStream();
+        addLog('예약 성공 알림 완료. 추가 예매를 계속할 수 있습니다.', 'success');
+        stopStream('예약 성공');
         resetStartBtn();
         break;
       case 'error':
         addLog(msg.msg, 'error');
-        stopStream();
+        stopStream('오류');
         resetStartBtn();
         break;
       case 'done':
         addLog('스나이퍼 종료', 'warn');
-        stopStream();
+        stopStream('종료');
         resetStartBtn();
         break;
     }
   }
 
-  function stopStream() {
+  function stopStream(label = '종료') {
+    streamClosed = true;
     if (eventSource) { eventSource.close(); eventSource = null; }
     $('dot').classList.remove('running');
-    $('poll-pill').textContent = '종료';
+    $('poll-pill').textContent = label;
     $('poll-pill').classList.remove('running');
   }
 
@@ -786,6 +836,9 @@
   ['dep','arr','date','from-time','to-time'].forEach(id => {
     $(id).addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
   });
+  $('login-id').addEventListener('change', saveCurrentLogin);
+  $('login-password').addEventListener('change', saveCurrentLogin);
+  restoreLogin(trainType);
   restoreState();
 </script>
 </body>

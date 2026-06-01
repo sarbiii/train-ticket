@@ -124,6 +124,13 @@ def _build_client_for(train_type: str, user_id: str | None = None, password: str
         return build_srt_client(user_id, password)
     return build_client(user_id, password)
 
+def _passenger_count(data: dict) -> int:
+    try:
+        count = int(data.get("passenger_count", 1))
+    except (TypeError, ValueError):
+        count = 1
+    return min(4, max(1, count))
+
 def _remember_search(params: dict, trains: list[dict]) -> None:
     with _state_lock:
         _session["search"] = {
@@ -164,16 +171,17 @@ def _record_event(msg: dict) -> None:
 def index():
     return render_template("ticket_web.html")
 
-def _search_all_trains(client, dep, arr, date, from_time, to_time):
+def _search_all_trains(client, dep, arr, date, from_time, to_time, passenger_count=1):
     collected: list = []
     seen_ids: set[str] = set()
     cursor = from_time
+    passengers = [AdultPassenger() for _ in range(_passenger_count({"passenger_count": passenger_count}))]
     for _ in range(20):
         try:
             batch = client.search_train(
                 dep, arr, date, cursor,
                 train_type=TRAIN_TYPE_MAP["ktx"],
-                passengers=[AdultPassenger()],
+                passengers=passengers,
                 include_no_seats=True,
                 include_waiting_list=True,
             )
@@ -257,12 +265,15 @@ def api_search():
     from_time  = data.get("from_time", "000000")
     to_time    = data.get("to_time",   "235900")
     train_type = data.get("train_type", "ktx").lower()
+    passenger_count = _passenger_count(data)
 
     if not (dep and arr and date):
         return jsonify({"error": "출발역, 도착역, 날짜를 모두 입력하세요."}), 400
     if train_type not in {"ktx", "srt"}:
         return jsonify({"error": "열차 종류는 KTX 또는 SRT만 가능합니다."}), 400
     user_id, password = _normalize_login(data, train_type)
+    if not user_id or not password:
+        user_id, password = _get_credentials(train_type)
     if not user_id or not password:
         return jsonify({"error": "로그인 ID와 비밀번호를 입력하세요."}), 400
 
@@ -273,6 +284,7 @@ def api_search():
         "from_time": from_time,
         "to_time": to_time,
         "train_type": train_type,
+        "passenger_count": passenger_count,
     }
 
     if train_type == "srt":
@@ -318,7 +330,7 @@ def api_search():
     _remember_credentials("ktx", user_id, password)
     _session["client"]     = client
     _session["train_type"] = "ktx"
-    in_range = _search_all_trains(client, dep, arr, date, from_time, to_time)
+    in_range = _search_all_trains(client, dep, arr, date, from_time, to_time, passenger_count)
     if not in_range:
         return jsonify({"error": f"{dep}→{arr} {_fmt_date(date)} 구간에 KTX 열차가 없습니다."}), 404
     in_range.sort(key=lambda t: normalize_train(t, 0)["dep_time"])
@@ -435,6 +447,7 @@ def _snipe_thread(data, log_queue, stop_flag, client) -> None:
     interval    = max(30.0, float(data.get("interval", 45)))
     train_type  = data.get("train_type", _session.get("train_type", "ktx")).lower()
     is_srt      = (train_type == "srt")
+    passenger_count = _passenger_count(data)
 
     def push(msg_type, **kwargs):
         msg = {"type": msg_type, **kwargs}
@@ -477,9 +490,9 @@ def _snipe_thread(data, log_queue, stop_flag, client) -> None:
         return
 
     log(f"스나이퍼 시작 [{('SRT' if is_srt else 'KTX')}]: {dep} → {arr}  {_fmt_date(date)}")
-    log(f"대상 {len(train_ids)}개 열차  |  간격 {interval:.0f}초  |  {seat_option}  |  대기 {'ON' if try_waiting else 'OFF'}")
+    log(f"대상 {len(train_ids)}개 열차  |  성인 {passenger_count}명  |  간격 {interval:.0f}초  |  {seat_option}  |  대기 {'ON' if try_waiting else 'OFF'}")
 
-    passengers    = [SRTAdult()] if is_srt else [AdultPassenger()]
+    passengers    = [SRTAdult() for _ in range(passenger_count)] if is_srt else [AdultPassenger() for _ in range(passenger_count)]
     attempt       = 0
     consec_errors = 0
 
@@ -491,7 +504,7 @@ def _snipe_thread(data, log_queue, stop_flag, client) -> None:
             if is_srt:
                 trains = _search_all_srt_trains(client, dep, arr, date, from_time, to_time)
             else:
-                trains = _search_all_trains(client, dep, arr, date, from_time, to_time)
+                trains = _search_all_trains(client, dep, arr, date, from_time, to_time, passenger_count)
             consec_errors = 0
         except NoResultsError:
             log(f"#{attempt:05d}  조회 결과 없음", "warn")

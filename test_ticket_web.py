@@ -30,6 +30,7 @@ def _reset_session() -> None:
     ticket_web._session["credentials"] = {"ktx": None, "srt": None}
     ticket_web._session["thread"] = None
     ticket_web._session["log_queue"] = None
+    ticket_web._session["stop_flag"] = ticket_web.threading.Event()
     ticket_web._session["search"] = None
     ticket_web._session["snipe"] = None
     ticket_web._session["logs"] = []
@@ -63,8 +64,8 @@ def test_search_uses_payload_login_and_state_does_not_leak_password(monkeypatch)
         captured["password"] = password
         return DummyClient()
 
-    def fake_search_all(client, dep, arr, date, from_time, to_time):
-        captured["range"] = (dep, arr, date, from_time, to_time)
+    def fake_search_all(client, dep, arr, date, from_time, to_time, passenger_count):
+        captured["range"] = (dep, arr, date, from_time, to_time, passenger_count)
         return [DummyTrain()]
 
     def fake_normalize_train(train, index):
@@ -90,6 +91,7 @@ def test_search_uses_payload_login_and_state_does_not_leak_password(monkeypatch)
         "from_time": "090000",
         "to_time": "100000",
         "train_type": "ktx",
+        "passenger_count": 2,
         "login": {"user_id": "member-1", "password": "secret-pw"},
     })
 
@@ -97,7 +99,7 @@ def test_search_uses_payload_login_and_state_does_not_leak_password(monkeypatch)
     assert captured == {
         "user_id": "member-1",
         "password": "secret-pw",
-        "range": ("서울", "부산", "20260602", "090000", "100000"),
+        "range": ("서울", "부산", "20260602", "090000", "100000", 2),
     }
     state = client.get("/api/state").get_json()
     assert "secret-pw" not in str(state)
@@ -162,6 +164,7 @@ def test_snipe_success_stream_and_state_do_not_leak_password(monkeypatch) -> Non
         "from_time": "090000",
         "to_time": "100000",
         "train_type": "ktx",
+        "passenger_count": 2,
         "login": {"user_id": "member-1", "password": "secret-pw"},
     })
     assert search_resp.status_code == 200
@@ -177,6 +180,7 @@ def test_snipe_success_stream_and_state_do_not_leak_password(monkeypatch) -> Non
         "seat_option": "general-first",
         "try_waiting": False,
         "interval": 30,
+        "passenger_count": 2,
     })
     assert start_resp.status_code == 200
 
@@ -184,6 +188,7 @@ def test_snipe_success_stream_and_state_do_not_leak_password(monkeypatch) -> Non
     thread.join(timeout=2)
     assert not thread.is_alive()
     assert client_obj.reserve_calls
+    assert len(client_obj.reserve_calls[0]["passengers"]) == 2
 
     stream_resp = client.get("/api/snipe/stream")
     stream_body = b"".join(stream_resp.response).decode("utf-8")
@@ -194,4 +199,49 @@ def test_snipe_success_stream_and_state_do_not_leak_password(monkeypatch) -> Non
     assert state["success"]["reservation_id"] == "R123"
     assert state["success"]["buy_limit_date"] == "2026-06-02"
     assert state["snipe"]["payload"]["train_ids"] == ["ktx:test"]
+    assert state["snipe"]["payload"]["passenger_count"] == 2
     assert "secret-pw" not in str(state)
+
+
+def test_search_can_reuse_first_login_credentials(monkeypatch) -> None:
+    _reset_session()
+    captured = []
+
+    def fake_build_client(user_id: str, password: str):
+        captured.append((user_id, password))
+        return DummyClient()
+
+    monkeypatch.setattr(ticket_web, "build_client", fake_build_client)
+    monkeypatch.setattr(ticket_web, "_search_all_trains", lambda *args: [DummyTrain()])
+    monkeypatch.setattr(ticket_web, "normalize_train", lambda item, index: {
+        "train_no": "101",
+        "dep_time": "090000",
+        "arr_time": "120000",
+        "has_general_seat": False,
+        "has_special_seat": False,
+        "has_waiting_list": False,
+    })
+    monkeypatch.setattr(ticket_web, "build_train_id", lambda train: "ktx:test")
+
+    client = ticket_web.app.test_client()
+    first = client.post("/api/search", json={
+        "dep": "서울",
+        "arr": "부산",
+        "date": "20260602",
+        "from_time": "090000",
+        "to_time": "100000",
+        "train_type": "ktx",
+        "login": {"user_id": "member-1", "password": "secret-pw"},
+    })
+    assert first.status_code == 200
+
+    second = client.post("/api/search", json={
+        "dep": "서울",
+        "arr": "부산",
+        "date": "20260602",
+        "from_time": "090000",
+        "to_time": "100000",
+        "train_type": "ktx",
+    })
+    assert second.status_code == 200
+    assert captured == [("member-1", "secret-pw"), ("member-1", "secret-pw")]
