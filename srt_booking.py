@@ -1,8 +1,6 @@
 """SRT 예매 유틸리티 — ktx_booking.py 와 동일한 인터페이스 제공."""
 from __future__ import annotations
 
-import os
-
 try:
     from SRT import SRT, Adult, Child, Senior, SeatType
     from SRT.errors import (
@@ -23,11 +21,11 @@ SEAT_OPTION_MAP: dict[str, SeatType] = {
 _SOLDOUT_KEYWORDS = ("없습니다", "매진", "좌석이 없", "잔여석이 없", "예약 불가")
 
 
-def build_srt_client() -> SRT:
-    srt_id = os.environ.get("KSKILL_SRT_ID", "").strip()
-    srt_pw = os.environ.get("KSKILL_SRT_PASSWORD", "").strip()
+def build_srt_client(srt_id: str | None = None, srt_pw: str | None = None) -> SRT:
+    srt_id = (srt_id or "").strip()
+    srt_pw = (srt_pw or "").strip()
     if not srt_id or not srt_pw:
-        raise SystemExit("KSKILL_SRT_ID / KSKILL_SRT_PASSWORD 가 .env에 설정되지 않았습니다.")
+        raise SystemExit("SRT 로그인이 필요합니다. 웹 화면에서 SRT ID와 비밀번호를 입력하세요.")
     return SRT(srt_id, srt_pw)
 
 

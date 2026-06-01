@@ -1,4 +1,11 @@
 .env
+.env.*
 __pycache__/
+.pytest_cache/
 *.pyc
 *.pyo
+.DS_Store
+SESSION_SUMMARY*.md
+build/
+dist/
+*.spec.bak

@@ -1,100 +1,0 @@
-[2026-05-23 18:08:38] [INFO    ] discord.client: logging in using static token
-[2026-05-23 18:08:40] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: ed669b8ac74c368dfef5b4d3eb0b0125).
-Discord bot ready: sarbii's claw#2274
-[2026-05-23 18:10:45] [INFO    ] discord.client: logging in using static token
-[2026-05-23 18:10:46] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 4da8d755560cb52b9bbb623ed6815a8b).
-Discord bot ready: sarbii's claw#2274
-[2026-05-23 18:12:03] [INFO    ] discord.client: logging in using static token
-[2026-05-23 18:12:04] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: a836f389f0b2e121448028dc28bddb16).
-Discord slash commands synced
-Discord bot ready: sarbii's claw#2274
-  [90m(1회 조회 중...)[0m  [90m(2회 조회 중...)[0m  [90m(3회 조회 중...)[0m  [90m(4회 조회 중...)[0m  [90m(5회 조회 중...)[0m  [90m(6회 조회 중...)[0m                                [90m(1회 조회 중...)[0m  [90m(2회 조회 중...)[0m                                [90m(1회 조회 중...)[0m  [90m(2회 조회 중...)[0m  [90m(3회 조회 중...)[0m[2026-05-23 18:31:45] [INFO    ] discord.client: logging in using static token
-[2026-05-23 18:31:46] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: b27df8007cb04b84ef84660fdffc3e3c).
-Discord slash commands synced
-Discord bot ready: sarbii's claw#2274
-[2026-05-23 18:32:47] [INFO    ] discord.client: logging in using static token
-[2026-05-23 18:32:48] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 66ae4602238ad2c8190d32f6fb989fbb).
-Discord slash commands synced
-Discord bot ready: sarbii's claw#2274
-  [90m(1회 조회 중...)[0m  [90m(2회 조회 중...)[0m  [90m(3회 조회 중...)[0m                              [90m[18:34:13][0m [0m스나이퍼 시작  [1m서울[0m → [1m부산[0m  [1m2026-06-01[0m[0m
-[90m[18:34:13][0m [0m대상 [1m8[0m개 열차  |  간격 45초  |  general-first  |  대기 OFF[0m
-[90m  ────────────────────────────────────────────────────[0m
-[32m[18:34:13][0m [32m#00001  🎯 [1m101 09:33[0m  [[32m일반석 ✓[0m | [32m특실 ✓[0m][0m
-[90m[18:34:13][0m [0m  → 예약 시도...[0m
-
-[32m════════════════════════════════════════════════════[0m
-[32m[1m  ✅  KTX 예약 성공![0m
-[32m════════════════════════════════════════════════════[0m
-  [90m예약번호[0m  [97m[1m320260566162857[0m
-  [90m열차    [0m  KTX 101
-  [90m구간    [0m  서울 09:33  →  부산 12:53
-  [90m운임    [0m  53500원
-  [90m결제기한[0m  [31m[1m2026-05-23 18:44[0m 까지
-[32m════════════════════════════════════════════════════[0m
-[33m  ⚠  Korail 앱 또는 www.letskorail.com 에서 결제 기한 내에 결제하세요![0m
-[32m════════════════════════════════════════════════════[0m
-
-  [90m(1회 조회 중...)[0m  [90m(2회 조회 중...)[0m  [90m(3회 조회 중...)[0m                              [90m[18:36:33][0m [0m스나이퍼 시작  [1m서울[0m → [1m부산[0m  [1m2026-06-01[0m[0m
-[90m[18:36:33][0m [0m대상 [1m8[0m개 열차  |  간격 45초  |  general-first  |  대기 OFF[0m
-[90m  ────────────────────────────────────────────────────[0m
-[32m[18:36:33][0m [32m#00001  🎯 [1m101 09:33[0m  [[32m일반석 ✓[0m | [32m특실 ✓[0m][0m
-[90m[18:36:33][0m [0m  → 예약 시도...[0m
-
-[32m════════════════════════════════════════════════════[0m
-[32m[1m  ✅  KTX 예약 성공![0m
-[32m════════════════════════════════════════════════════[0m
-  [90m예약번호[0m  [97m[1m320260566164582[0m
-  [90m열차    [0m  KTX 101
-  [90m구간    [0m  서울 09:33  →  부산 12:53
-  [90m운임    [0m  53500원
-  [90m결제기한[0m  [31m[1m2026-05-23 18:46[0m 까지
-[32m════════════════════════════════════════════════════[0m
-[33m  ⚠  Korail 앱 또는 www.letskorail.com 에서 결제 기한 내에 결제하세요![0m
-[32m════════════════════════════════════════════════════[0m
-
-[2026-05-23 18:45:25] [INFO    ] discord.client: logging in using static token
-[2026-05-23 18:45:27] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: d2f2aead3cb7c29a88ac22f3ef23f347).
-Discord slash commands synced
-Discord bot ready: sarbii's claw#2274
-  [90m(1회 조회 중...)[0m  [90m(2회 조회 중...)[0m                              [90m[18:51:08][0m [0m스나이퍼 시작  [1m서울[0m → [1m부산[0m  [1m2026-06-01[0m[0m
-[90m[18:51:08][0m [0m대상 [1m4[0m개 열차  |  간격 45초  |  general-only  |  대기 OFF[0m
-[90m  ────────────────────────────────────────────────────[0m
-Discord view disable failed: 404 Not Found (error code: 10008): Unknown Message
-[32m[18:51:08][0m [32m#00001  🎯 [1m001 05:13[0m  [[32m일반석 ✓[0m | [32m특실 ✓[0m][0m
-[90m[18:51:08][0m [0m  → 예약 시도...[0m
-
-[32m════════════════════════════════════════════════════[0m
-[32m[1m  ✅  KTX 예약 성공![0m
-[32m════════════════════════════════════════════════════[0m
-  [90m예약번호[0m  [97m[1m320260566175062[0m
-  [90m열차    [0m  KTX 001
-  [90m구간    [0m  서울 05:13  →  부산 07:50
-  [90m운임    [0m  59800원
-  [90m결제기한[0m  [31m[1m2026-05-23 19:01[0m 까지
-[32m════════════════════════════════════════════════════[0m
-[33m  ⚠  Korail 앱 또는 www.letskorail.com 에서 결제 기한 내에 결제하세요![0m
-[32m════════════════════════════════════════════════════[0m
-
-  [90m(1회 조회 중...)[0m  [90m(2회 조회 중...)[0m                              [90m[18:52:33][0m [0m스나이퍼 시작  [1m서울[0m → [1m동대구[0m  [1m2026-05-28[0m[0m
-[90m[18:52:33][0m [0m대상 [1m6[0m개 열차  |  간격 45초  |  general-first  |  대기 OFF[0m
-[90m  ────────────────────────────────────────────────────[0m
-Discord view disable failed: 404 Not Found (error code: 10008): Unknown Message
-[32m[18:52:33][0m [32m#00001  🎯 [1m201 05:03[0m  [[32m일반석 ✓[0m | [32m특실 ✓[0m][0m
-[90m[18:52:33][0m [0m  → 예약 시도...[0m
-
-[32m════════════════════════════════════════════════════[0m
-[32m[1m  ✅  KTX 예약 성공![0m
-[32m════════════════════════════════════════════════════[0m
-  [90m예약번호[0m  [97m[1m320260566176066[0m
-  [90m열차    [0m  KTX-산천 201
-  [90m구간    [0m  서울 05:03  →  동대구 06:46
-  [90m운임    [0m  43500원
-  [90m결제기한[0m  [31m[1m2026-05-23 19:02[0m 까지
-[32m════════════════════════════════════════════════════[0m
-[33m  ⚠  Korail 앱 또는 www.letskorail.com 에서 결제 기한 내에 결제하세요![0m
-[32m════════════════════════════════════════════════════[0m
-
-[2026-05-23 19:03:31] [INFO    ] discord.client: logging in using static token
-[2026-05-23 19:03:32] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: b901fedef3b1555bfdc4af898fd1b1cf).
-Discord slash commands synced
-Discord bot ready: sarbii's claw#2274

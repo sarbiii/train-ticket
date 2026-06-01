@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import base64
 import json
-import os
 import random
 import re
 import string
@@ -663,15 +662,11 @@ def print_json(payload: dict[str, object]) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
-def build_client() -> PatchedKorail:
+def build_client(korail_id: str | None = None, korail_pw: str | None = None) -> PatchedKorail:
     ensure_runtime_dependencies()
-    korail_id = os.environ.get("KSKILL_KTX_ID")
-    korail_pw = os.environ.get("KSKILL_KTX_PASSWORD")
     if not korail_id or not korail_pw:
         raise SystemExit(
-            "이 작업에는 KSKILL_KTX_ID, KSKILL_KTX_PASSWORD 환경변수가 필요합니다. "
-            "환경변수가 설정되어 있지 않으면 ~/.config/k-skill/secrets.env 에 추가하거나 "
-            "에이전트의 secret vault에서 주입해 주세요."
+            "KTX 로그인이 필요합니다. 웹 화면에서 Korail ID와 비밀번호를 입력하세요."
         )
     client = PatchedKorail(korail_id, korail_pw)
     if not client.logined:

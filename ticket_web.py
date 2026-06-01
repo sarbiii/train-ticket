@@ -1,34 +1,19 @@
 #!/usr/bin/env python3
-"""KTX / SRT 취소표 스나이퍼 — 외부 접속 웹 서버 (Tailscale / 8188)"""
+"""KTX / SRT 취소표 스나이퍼 — 로컬 전용 웹 앱"""
 from __future__ import annotations
 
 import json
-import os
 import queue
 import random
-import shutil
-import subprocess
+import socket
 import sys
 import threading
 import time
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 
-# ── env 로딩 ─────────────────────────────────────────────────────────────────
-
-def _load_dotenv(path: Path) -> None:
-    if not path.exists():
-        return
-    with open(path) as f:
-        for raw in f:
-            line = raw.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
-
-_load_dotenv(Path(__file__).parent / ".env")
-_load_dotenv(Path.home() / ".config" / "k-skill" / "secrets.env")
+BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 
 # ── ktx_booking / srt_booking import ────────────────────────────────────────
 
@@ -55,41 +40,27 @@ try:
     _SRT_AVAILABLE = True
 except ImportError:
     _SRT_AVAILABLE = False
+    SRTAdult = None  # type: ignore[assignment]
+    SRTLoginError = SRTNotLoggedInError = SRTResponseError = SRTNetFunnelError = RuntimeError  # type: ignore[misc,assignment]
 
 try:
     from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 except ImportError:
     sys.exit("Flask 없음: python3 -m pip install flask")
 
-# ── tmux 자동 실행 ────────────────────────────────────────────────────────────
-
-def _ensure_tmux() -> None:
-    if os.environ.get("TMUX"):
-        return
-    if not shutil.which("tmux"):
-        print("tmux가 없습니다. brew install tmux 후 다시 실행하세요.")
-        sys.exit(1)
-    session = "ktx-web"
-    script  = str(Path(__file__).resolve())
-    py      = sys.executable
-    exists  = subprocess.run(
-        ["tmux", "has-session", "-t", session],
-        capture_output=True,
-    ).returncode == 0
-    if exists:
-        print(f"기존 tmux 세션 '{session}'에 연결합니다 (Ctrl+B, D 로 detach)...")
-        os.execvp("tmux", ["tmux", "attach-session", "-t", session])
-    else:
-        print(f"tmux 세션 '{session}' 생성 후 실행합니다 (Ctrl+B, D 로 detach)...")
-        os.execvp("tmux", ["tmux", "new-session", "-s", session, py, script])
+try:
+    from waitress import serve as _serve
+except ImportError:
+    _serve = None
 
 # ── Flask 앱 ─────────────────────────────────────────────────────────────────
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder=str(BASE_DIR / "templates"))
 app.config["JSON_AS_ASCII"] = False
 
 _session: dict = {
     "client":    None,
+    "credentials": {"ktx": None, "srt": None},
     "thread":    None,
     "log_queue": None,
     "stop_flag": threading.Event(),
@@ -123,6 +94,36 @@ def _is_running() -> bool:
     thread = _session.get("thread")
     return bool(thread and thread.is_alive())
 
+def _normalize_login(data: dict, train_type: str) -> tuple[str, str]:
+    login = data.get("login") if isinstance(data.get("login"), dict) else data
+    user_id = (
+        login.get(f"{train_type}_id")
+        or login.get("user_id")
+        or login.get("id")
+        or ""
+    ).strip()
+    password = (
+        login.get(f"{train_type}_password")
+        or login.get("password")
+        or ""
+    ).strip()
+    return user_id, password
+
+def _remember_credentials(train_type: str, user_id: str, password: str) -> None:
+    with _state_lock:
+        _session["credentials"][train_type] = {"id": user_id, "password": password}
+
+def _get_credentials(train_type: str) -> tuple[str | None, str | None]:
+    creds = (_session.get("credentials") or {}).get(train_type) or {}
+    return creds.get("id"), creds.get("password")
+
+def _build_client_for(train_type: str, user_id: str | None = None, password: str | None = None):
+    if not user_id or not password:
+        user_id, password = _get_credentials(train_type)
+    if train_type == "srt":
+        return build_srt_client(user_id, password)
+    return build_client(user_id, password)
+
 def _remember_search(params: dict, trains: list[dict]) -> None:
     with _state_lock:
         _session["search"] = {
@@ -133,9 +134,10 @@ def _remember_search(params: dict, trains: list[dict]) -> None:
         }
 
 def _remember_snipe(payload: dict) -> None:
+    sanitized = {k: v for k, v in payload.items() if k not in {"login", "password", "user_id", "id", "ktx_id", "ktx_password", "srt_id", "srt_password"}}
     with _state_lock:
         _session["snipe"] = {
-            "payload": payload,
+            "payload": sanitized,
             "started_at": datetime.now().isoformat(timespec="seconds"),
         }
         _session["logs"] = []
@@ -155,39 +157,6 @@ def _record_event(msg: dict) -> None:
             _session["logs"].append(msg)
             if len(_session["logs"]) > _MAX_LOG_HISTORY:
                 _session["logs"] = _session["logs"][-_MAX_LOG_HISTORY:]
-
-# ── Discord 알림 ──────────────────────────────────────────────────────────────
-
-def _discord_notify(res: dict) -> None:
-    url = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
-    if not url:
-        return
-    dep_t    = res.get("dep_time", "?")
-    arr_t    = res.get("arr_time", "?")
-    buy_d    = res.get("buy_limit_date", "?")
-    buy_t    = res.get("buy_limit_time", "?")
-    user_id  = os.environ.get("DISCORD_USER_ID", "").strip()
-    mention  = f"<@{user_id}>" if user_id else "@here"
-    payload  = {
-        "content": mention,
-        "embeds": [{
-            "title": "🎉 KTX 예약 성공!",
-            "color": 0x22c55e,
-            "fields": [
-                {"name": "예약번호",    "value": res.get("reservation_id", "?"), "inline": True},
-                {"name": "열차",        "value": f"{res.get('train_type','KTX')} {res.get('train_no','?')}", "inline": True},
-                {"name": "구간",        "value": f"{res.get('dep_name','?')} {dep_t} → {res.get('arr_name','?')} {arr_t}", "inline": False},
-                {"name": "운임",        "value": f"{res.get('price','?')}원", "inline": True},
-                {"name": "⚠ 결제기한", "value": f"{buy_d} {buy_t}", "inline": True},
-            ],
-            "footer": {"text": "Korail 앱 또는 letskorail.com 에서 결제기한 내 결제하세요"},
-        }]
-    }
-    try:
-        import requests as _req
-        _req.post(url, json=payload, timeout=10)
-    except Exception as exc:
-        print(f"[Discord] 전송 오류: {exc}", flush=True)
 
 # ── 라우트 ────────────────────────────────────────────────────────────────────
 
@@ -291,6 +260,11 @@ def api_search():
 
     if not (dep and arr and date):
         return jsonify({"error": "출발역, 도착역, 날짜를 모두 입력하세요."}), 400
+    if train_type not in {"ktx", "srt"}:
+        return jsonify({"error": "열차 종류는 KTX 또는 SRT만 가능합니다."}), 400
+    user_id, password = _normalize_login(data, train_type)
+    if not user_id or not password:
+        return jsonify({"error": "로그인 ID와 비밀번호를 입력하세요."}), 400
 
     search_params = {
         "dep": dep,
@@ -305,11 +279,12 @@ def api_search():
         if not _SRT_AVAILABLE:
             return jsonify({"error": "SRTrain 패키지가 없습니다. python3 -m pip install SRTrain"}), 500
         try:
-            client = build_srt_client()
+            client = build_srt_client(user_id, password)
         except SystemExit as exc:
             return jsonify({"error": str(exc)}), 401
         except Exception as exc:
             return jsonify({"error": f"SRT 로그인 실패: {exc}"}), 401
+        _remember_credentials("srt", user_id, password)
         _session["client"]     = client
         _session["train_type"] = "srt"
         in_range = _search_all_srt_trains(client, dep, arr, date, from_time, to_time)
@@ -335,11 +310,12 @@ def api_search():
 
     # ── KTX ──
     try:
-        client = build_client()
+        client = build_client(user_id, password)
     except SystemExit as exc:
         return jsonify({"error": str(exc)}), 401
     except Exception as exc:
         return jsonify({"error": f"로그인 실패: {exc}"}), 401
+    _remember_credentials("ktx", user_id, password)
     _session["client"]     = client
     _session["train_type"] = "ktx"
     in_range = _search_all_trains(client, dep, arr, date, from_time, to_time)
@@ -372,6 +348,15 @@ def api_snipe_start():
     if old_thread and old_thread.is_alive():
         old_thread.join(timeout=3.0)
     data = request.get_json() or {}
+    train_type = data.get("train_type", _session.get("train_type", "ktx")).lower()
+    if train_type not in {"ktx", "srt"}:
+        return jsonify({"error": "열차 종류는 KTX 또는 SRT만 가능합니다."}), 400
+    if train_type == "srt" and not _SRT_AVAILABLE:
+        return jsonify({"error": "SRTrain 패키지가 없습니다. python3 -m pip install SRTrain"}), 500
+    if not data.get("dep") or not data.get("arr") or not data.get("date") or not data.get("from_time"):
+        return jsonify({"error": "출발역, 도착역, 날짜, 시작 시각이 필요합니다."}), 400
+    if not all(_get_credentials(train_type)):
+        return jsonify({"error": "먼저 웹 화면에서 로그인하고 열차를 조회하세요."}), 400
     if not data.get("train_ids"):
         return jsonify({"error": "열차를 하나 이상 선택하세요."}), 400
     _remember_snipe(data)
@@ -443,6 +428,7 @@ def _snipe_thread(data, log_queue, stop_flag, client) -> None:
     arr         = data["arr"]
     date        = data["date"]
     from_time   = data["from_time"]
+    to_time     = data.get("to_time", "235900")
     train_ids   = data["train_ids"]
     seat_option = data.get("seat_option", "general-first")
     try_waiting = bool(data.get("try_waiting", False))
@@ -471,7 +457,7 @@ def _snipe_thread(data, log_queue, stop_flag, client) -> None:
     def login_with_retry(max_attempts=3):
         for attempt in range(1, max_attempts + 1):
             try:
-                return build_srt_client() if is_srt else build_client()
+                return _build_client_for(train_type)
             except (NeedToLoginError, SRTLoginError) as exc:
                 log(f"로그인 실패 ({attempt}/{max_attempts}): {exc}", "warn")
             except SystemExit as exc:
@@ -487,7 +473,7 @@ def _snipe_thread(data, log_queue, stop_flag, client) -> None:
         log(f"{'SRT' if is_srt else 'Korail'} 로그인 중...")
         client = login_with_retry()
     if client is None:
-        push("error", msg="로그인 실패. .env의 ID / PASSWORD를 확인하세요.")
+        push("error", msg="로그인 실패. 웹 화면의 ID / 비밀번호를 확인하세요.")
         return
 
     log(f"스나이퍼 시작 [{('SRT' if is_srt else 'KTX')}]: {dep} → {arr}  {_fmt_date(date)}")
@@ -503,15 +489,9 @@ def _snipe_thread(data, log_queue, stop_flag, client) -> None:
         # ── 열차 조회 ─────────────────────────────────────────────────────────
         try:
             if is_srt:
-                trains = client.search_train(dep, arr, date, from_time, available_only=False)
+                trains = _search_all_srt_trains(client, dep, arr, date, from_time, to_time)
             else:
-                trains = client.search_train(
-                    dep, arr, date, from_time,
-                    train_type=TRAIN_TYPE_MAP["ktx"],
-                    passengers=passengers,
-                    include_no_seats=True,
-                    include_waiting_list=True,
-                )
+                trains = _search_all_trains(client, dep, arr, date, from_time, to_time)
             consec_errors = 0
         except NoResultsError:
             log(f"#{attempt:05d}  조회 결과 없음", "warn")
@@ -618,7 +598,6 @@ def _snipe_thread(data, log_queue, stop_flag, client) -> None:
                     "buy_limit_time": buy_t,
                 }
                 push("success", reservation=res_payload)
-                _discord_notify(res_payload)
                 return
 
             except SoldOutError:
@@ -655,29 +634,36 @@ def _snipe_thread(data, log_queue, stop_flag, client) -> None:
 
 # ── 접속 URL 안내 ─────────────────────────────────────────────────────────────
 
-def _print_urls(port: int) -> None:
-    urls = [f"  http://127.0.0.1:{port}  (로컬)"]
-    try:
-        result = subprocess.run(["tailscale", "ip", "-4"], capture_output=True, text=True, timeout=3)
-        if result.returncode == 0 and result.stdout.strip():
-            urls.append(f"  http://{result.stdout.strip()}:{port}  ← Tailscale (외부 접속)")
-    except Exception:
-        pass
+def _find_free_port(preferred: int = 8188) -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        if s.connect_ex(("127.0.0.1", preferred)) != 0:
+            return preferred
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
+
+def _print_urls(port: int) -> str:
+    url = f"http://127.0.0.1:{port}"
     print("=" * 52)
-    print("  KTX 취소표 스나이퍼 — 웹 서버")
+    print("  KTX / SRT 취소표 스나이퍼 — 로컬 웹 앱")
     print("=" * 52)
-    for u in urls:
-        print(u)
+    print(f"  {url}")
     print()
-    print("  tmux detach : Ctrl+B → D")
-    print(f"  재연결      : tmux attach -t ktx-web")
-    print("  종료        : Ctrl+C")
+    print("  외부 접속 차단: 127.0.0.1 로만 실행")
+    print("  종료: 이 창을 닫거나 Ctrl+C")
     print("=" * 52)
+    return url
 
 # ── 서버 실행 ─────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    _ensure_tmux()
-    PORT = 8188
-    _print_urls(PORT)
-    app.run(host="0.0.0.0", port=PORT, debug=False, threaded=True)
+    PORT = _find_free_port(8188)
+    URL = _print_urls(PORT)
+    threading.Timer(0.8, lambda: webbrowser.open(URL)).start()
+    try:
+        if _serve:
+            _serve(app, host="127.0.0.1", port=PORT, threads=8)
+        else:
+            app.run(host="127.0.0.1", port=PORT, debug=False, threaded=True)
+    except KeyboardInterrupt:
+        print("\n종료합니다.", flush=True)

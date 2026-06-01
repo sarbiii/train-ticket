@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KTX 취소표 스나이퍼</title>
+  <title>KTX / SRT 취소표 스나이퍼</title>
   <style>
     :root {
       --blue:      #1d4ed8;
@@ -81,7 +81,7 @@
     .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.875rem; }
     .field { display: flex; flex-direction: column; gap: 0.375rem; }
     .field label { font-size: 0.8125rem; font-weight: 600; color: var(--gray-600); }
-    input[type=text], input[type=date], input[type=time], input[type=number], select {
+    input[type=text], input[type=password], input[type=date], input[type=time], input[type=number], select {
       width: 100%;
       padding: 0.625rem 0.75rem;
       border: 1.5px solid var(--gray-200);
@@ -235,17 +235,32 @@
 
 <header>
   <div>
-    <h1>🚄 KTX 취소표 스나이퍼</h1>
-    <p>취소표 발생 즉시 자동 예약 — 결제는 Korail 앱에서 직접</p>
+    <h1>🚄 KTX / SRT 취소표 스나이퍼</h1>
+    <p>로컬 실행 전용 — 로그인 정보는 저장하지 않음</p>
   </div>
   <button id="notif-btn" onclick="requestNotifPermission()">🔔 알림 허용</button>
 </header>
 
 <div class="container">
 
-  <!-- ① 열차 조회 -->
+  <!-- ① 로그인 -->
+  <div class="card" id="card-login">
+    <div class="card-title">① 로그인</div>
+    <div class="grid-2">
+      <div class="field">
+        <label id="login-id-label">Korail ID</label>
+        <input type="text" id="login-id" autocomplete="username" placeholder="회원번호 / 이메일 / 휴대폰번호">
+      </div>
+      <div class="field">
+        <label id="login-password-label">Korail 비밀번호</label>
+        <input type="password" id="login-password" autocomplete="current-password" placeholder="비밀번호">
+      </div>
+    </div>
+  </div>
+
+  <!-- ② 열차 조회 -->
   <div class="card" id="card-search">
-    <div class="card-title">① 열차 조회</div>
+    <div class="card-title">② 열차 조회</div>
 
     <!-- 열차 종류 선택 -->
     <div style="margin-bottom:1rem">
@@ -283,10 +298,10 @@
     <div class="error-box hidden" id="search-error"></div>
   </div>
 
-  <!-- ② 열차 선택 -->
+  <!-- ③ 열차 선택 -->
   <div class="card hidden" id="card-trains">
     <div class="card-title">
-      <span>② 스나이핑할 열차 선택</span>
+      <span>③ 스나이핑할 열차 선택</span>
       <span id="train-count" style="font-size:.8125rem;font-weight:500;color:var(--gray-400)"></span>
     </div>
     <div class="table-actions">
@@ -308,9 +323,9 @@
     </table>
   </div>
 
-  <!-- ③ 옵션 -->
+  <!-- ④ 옵션 -->
   <div class="card hidden" id="card-options">
-    <div class="card-title">③ 옵션</div>
+    <div class="card-title">④ 옵션</div>
     <div class="grid-2" style="margin-bottom:.875rem">
       <div class="field">
         <label>좌석 선호</label>
@@ -351,7 +366,7 @@
 
   <!-- 성공 -->
   <div class="success-card hidden" id="card-success">
-    <div class="success-title">✅ KTX 예약 성공!</div>
+    <div class="success-title">✅ 예약 성공!</div>
     <div id="success-body"></div>
     <div class="pay-warning">⚠ Korail 앱 또는 www.letskorail.com 에서 결제 기한 내에 결제를 완료하세요!</div>
   </div>
@@ -418,7 +433,7 @@
   function sendBrowserNotification(r) {
     playBeep();
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    new Notification('🎉 KTX 예약 성공!', {
+    new Notification(`🎉 ${r.train_type || '열차'} 예약 성공!`, {
       body: `${r.dep_name} ${r.dep_time} → ${r.arr_name} ${r.arr_time}\n결제기한: ${r.buy_limit_date} ${r.buy_limit_time}`,
       requireInteraction: true,
     });
@@ -431,6 +446,8 @@
     trainType = type;
     document.getElementById('btn-ktx').classList.toggle('active', type === 'ktx');
     document.getElementById('btn-srt').classList.toggle('active', type === 'srt');
+    document.getElementById('login-id-label').textContent = type === 'srt' ? 'SRT ID' : 'Korail ID';
+    document.getElementById('login-password-label').textContent = type === 'srt' ? 'SRT 비밀번호' : 'Korail 비밀번호';
     // 출발역 기본값 변경
     const depEl = document.getElementById('dep');
     if (type === 'srt' && depEl.value === '서울') depEl.value = '수서';
@@ -553,9 +570,11 @@
     const date = $('date').value;
     const from = $('from-time').value;
     const to   = $('to-time').value;
+    const userId = $('login-id').value.trim();
+    const password = $('login-password').value;
 
-    if (!dep || !arr || !date) {
-      showError('search-error', '출발역, 도착역, 날짜를 모두 입력하세요.');
+    if (!userId || !password || !dep || !arr || !date) {
+      showError('search-error', '로그인 ID, 비밀번호, 출발역, 도착역, 날짜를 모두 입력하세요.');
       btn.disabled = false;
       btn.textContent = '열차 조회';
       return;
@@ -564,7 +583,15 @@
       const res  = await fetch('/api/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dep, arr, date: toDateParam(date), from_time: toTimeParam(from), to_time: toTimeParam(to), train_type: trainType }),
+        body: JSON.stringify({
+          dep,
+          arr,
+          date: toDateParam(date),
+          from_time: toTimeParam(from),
+          to_time: toTimeParam(to),
+          train_type: trainType,
+          login: { user_id: userId, password },
+        }),
       });
       const data = await res.json();
       if (!res.ok) { showError('search-error', data.error || '조회 실패'); return; }
@@ -626,6 +653,7 @@
       arr:         $('arr').value.trim(),
       date:        toDateParam($('date').value),
       from_time:   toTimeParam($('from-time').value),
+      to_time:     toTimeParam($('to-time').value),
       train_ids:   checked.map(c => c.value),
       seat_option: $('seat-option').value,
       try_waiting: $('try-waiting').checked,
