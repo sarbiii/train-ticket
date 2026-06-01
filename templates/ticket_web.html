@@ -236,7 +236,7 @@
 <header>
   <div>
     <h1>🚄 KTX / SRT 취소표 스나이퍼</h1>
-    <p>로컬 실행 전용 — 로그인 정보는 저장하지 않음</p>
+    <p>로컬 실행 전용 — 외부 접속 차단</p>
   </div>
   <button id="notif-btn" onclick="requestNotifPermission()">🔔 알림 허용</button>
 </header>
@@ -256,6 +256,7 @@
         <input type="password" id="login-password" autocomplete="current-password" placeholder="비밀번호">
       </div>
     </div>
+    <button class="btn btn-sm" style="margin-top:.875rem" onclick="clearSavedLogin()">저장 로그인 삭제</button>
   </div>
 
   <!-- ② 열차 조회 -->
@@ -466,6 +467,7 @@
   let trainData   = [];
   let eventSource = null;
   let streamClosed = true;
+  let terminalSeen = false;
   let pollAttempt = 0;
   const LOGIN_STORE_KEY = 'trainTicketLoginV1';
 
@@ -506,6 +508,13 @@
     const saved = readSavedLogins()[type] || {};
     $('login-id').value = saved.userId || '';
     $('login-password').value = saved.password || '';
+  }
+  async function clearSavedLogin() {
+    localStorage.removeItem(LOGIN_STORE_KEY);
+    $('login-id').value = '';
+    $('login-password').value = '';
+    await fetch('/api/credentials', { method: 'DELETE' }).catch(() => {});
+    addLog('저장된 로그인 정보를 삭제했습니다.', 'warn');
   }
 
   async function restoreState() {
@@ -733,15 +742,55 @@
   function startStream() {
     if (eventSource) eventSource.close();
     streamClosed = false;
+    terminalSeen = false;
     eventSource = new EventSource('/api/snipe/stream');
-    eventSource.onmessage = e => { try { handleMsg(JSON.parse(e.data)); } catch (_) {} };
-    eventSource.onerror   = () => {
-      if (streamClosed) return;
+    eventSource.onmessage = e => {
+      let msg = null;
+      try { msg = JSON.parse(e.data); } catch (_) { return; }
+      if (['success', 'error', 'done'].includes(msg.type)) {
+        terminalSeen = true;
+        streamClosed = true;
+      }
+      try { handleMsg(msg); }
+      catch (err) {
+        addLog(`화면 처리 오류: ${err.message || err}`, 'error');
+        if (terminalSeen) {
+          stopStream(msg.type === 'success' ? '예약 성공' : '종료');
+          resetStartBtn();
+        }
+      }
+    };
+    eventSource.onerror   = async () => {
+      if (streamClosed || terminalSeen) return;
+      const terminalState = await readTerminalState();
+      if (terminalState) {
+        stopStream(terminalState);
+        resetStartBtn();
+        return;
+      }
       streamClosed = true;
       addLog('서버 연결 끊김', 'warn');
       stopStream('연결 끊김');
       resetStartBtn();
     };
+  }
+
+  async function readTerminalState() {
+    try {
+      const res = await fetch('/api/state', { cache: 'no-store' });
+      if (!res.ok) return null;
+      const state = await res.json();
+      if (state.running) return null;
+      if (state.success) {
+        showSuccess(state.success);
+        return '예약 성공';
+      }
+      const logs = Array.isArray(state.logs) ? state.logs : [];
+      const last = logs[logs.length - 1] || {};
+      if (last.type === 'done') return '종료';
+      if (last.type === 'error') return '오류';
+    } catch (_) {}
+    return null;
   }
 
   function handleMsg(msg) {
@@ -754,11 +803,16 @@
         $('poll-pill').textContent = `${msg.attempt}번째 조회`;
         break;
       case 'success':
-        showSuccess(msg.reservation);
-        sendBrowserNotification(msg.reservation);
-        addLog('예약 성공 알림 완료. 추가 예매를 계속할 수 있습니다.', 'success');
-        stopStream('예약 성공');
-        resetStartBtn();
+        try {
+          showSuccess(msg.reservation);
+          sendBrowserNotification(msg.reservation);
+          addLog('예약 성공 알림 완료. 추가 예매를 계속할 수 있습니다.', 'success');
+        } catch (err) {
+          addLog(`예약 성공 후 알림 처리 실패: ${err.message || err}`, 'warn');
+        } finally {
+          stopStream('예약 성공');
+          resetStartBtn();
+        }
         break;
       case 'error':
         addLog(msg.msg, 'error');

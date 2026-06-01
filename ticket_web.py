@@ -117,6 +117,11 @@ def _get_credentials(train_type: str) -> tuple[str | None, str | None]:
     creds = (_session.get("credentials") or {}).get(train_type) or {}
     return creds.get("id"), creds.get("password")
 
+def _clear_credentials() -> None:
+    with _state_lock:
+        _session["client"] = None
+        _session["credentials"] = {"ktx": None, "srt": None}
+
 def _build_client_for(train_type: str, user_id: str | None = None, password: str | None = None):
     if not user_id or not password:
         user_id, password = _get_credentials(train_type)
@@ -432,6 +437,11 @@ def api_state():
             "last_poll": _session.get("last_poll"),
             "success":   _session.get("success"),
         })
+
+@app.route("/api/credentials", methods=["DELETE"])
+def api_clear_credentials():
+    _clear_credentials()
+    return jsonify({"status": "cleared"})
 
 # ── 스나이프 스레드 ───────────────────────────────────────────────────────────
 

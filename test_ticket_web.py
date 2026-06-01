@@ -245,3 +245,45 @@ def test_search_can_reuse_first_login_credentials(monkeypatch) -> None:
     })
     assert second.status_code == 200
     assert captured == [("member-1", "secret-pw"), ("member-1", "secret-pw")]
+
+
+def test_clear_credentials_removes_server_login(monkeypatch) -> None:
+    _reset_session()
+
+    monkeypatch.setattr(ticket_web, "build_client", lambda user_id, password: DummyClient())
+    monkeypatch.setattr(ticket_web, "_search_all_trains", lambda *args: [DummyTrain()])
+    monkeypatch.setattr(ticket_web, "normalize_train", lambda item, index: {
+        "train_no": "101",
+        "dep_time": "090000",
+        "arr_time": "120000",
+        "has_general_seat": False,
+        "has_special_seat": False,
+        "has_waiting_list": False,
+    })
+    monkeypatch.setattr(ticket_web, "build_train_id", lambda train: "ktx:test")
+
+    client = ticket_web.app.test_client()
+    first = client.post("/api/search", json={
+        "dep": "서울",
+        "arr": "부산",
+        "date": "20260602",
+        "from_time": "090000",
+        "to_time": "100000",
+        "train_type": "ktx",
+        "login": {"user_id": "member-1", "password": "secret-pw"},
+    })
+    assert first.status_code == 200
+
+    cleared = client.delete("/api/credentials")
+    assert cleared.status_code == 200
+    assert ticket_web._get_credentials("ktx") == (None, None)
+
+    second = client.post("/api/search", json={
+        "dep": "서울",
+        "arr": "부산",
+        "date": "20260602",
+        "from_time": "090000",
+        "to_time": "100000",
+        "train_type": "ktx",
+    })
+    assert second.status_code == 400
