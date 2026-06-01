@@ -176,6 +176,26 @@ def _record_event(msg: dict) -> None:
 def index():
     return render_template("ticket_web.html")
 
+@app.route("/privacy/clear")
+def privacy_clear():
+    _clear_credentials()
+    return """<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>저장 로그인 삭제</title></head>
+<body>
+<p id="status">저장된 로그인 정보를 삭제 중입니다.</p>
+<script>
+try {
+  localStorage.removeItem('trainTicketLoginV1');
+  sessionStorage.clear();
+  document.getElementById('status').textContent = '저장된 로그인 정보를 삭제했습니다. 이 창은 닫아도 됩니다.';
+} catch (err) {
+  document.getElementById('status').textContent = '브라우저 저장값 삭제 실패: ' + (err && err.message ? err.message : err);
+}
+</script>
+</body>
+</html>"""
+
 def _search_all_trains(client, dep, arr, date, from_time, to_time, passenger_count=1):
     collected: list = []
     seen_ids: set[str] = set()

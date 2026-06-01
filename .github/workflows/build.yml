@@ -3,6 +3,7 @@ name: Build desktop executables
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
 
 env:

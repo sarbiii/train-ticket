@@ -287,3 +287,17 @@ def test_clear_credentials_removes_server_login(monkeypatch) -> None:
         "train_type": "ktx",
     })
     assert second.status_code == 400
+
+
+def test_privacy_clear_page_clears_server_and_browser_storage_hint() -> None:
+    _reset_session()
+    ticket_web._remember_credentials("ktx", "member-1", "secret-pw")
+
+    client = ticket_web.app.test_client()
+    resp = client.get("/privacy/clear")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "localStorage.removeItem('trainTicketLoginV1')" in body
+    assert "secret-pw" not in body
+    assert ticket_web._get_credentials("ktx") == (None, None)
